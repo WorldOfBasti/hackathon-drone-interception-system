@@ -1,0 +1,9 @@
+# Copy this file to local.properties for real DJI hardware testing.
+# Generate the key in the DJI Developer portal for package:
+# org.skysentinel.djitakbridge
+DJI_SDK_APP_KEY=PASTE_DJI_APP_KEY_HERE
+
+# Keep this false by default. DJI's legacy native bootstrap can be unstable on
+# newer Xiaomi/Android builds; the app still launches and simulator streaming
+# works without it.
+DJI_ENABLE_NATIVE_BOOTSTRAP=false

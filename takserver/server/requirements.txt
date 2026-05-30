@@ -1,0 +1,8 @@
+opentakserver>=1.7.0
+pytak>=6.1.0
+lxml>=5.1.0
+pyOpenSSL>=24.0.0
+pyyaml>=6.0.0
+requests>=2.31.0
+psutil>=5.9.0
+psycopg-binary>=3.2.0

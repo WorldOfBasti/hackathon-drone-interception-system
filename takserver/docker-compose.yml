@@ -1,0 +1,144 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tak-postgres
+    hostname: postgres
+    environment:
+      POSTGRES_USER: ots
+      POSTGRES_PASSWORD: ${TAK_POSTGRES_PASSWORD:?Set TAK_POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ots
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ots"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: tak-rabbitmq
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: tak_user
+      RABBITMQ_DEFAULT_PASS: ${TAK_RABBITMQ_PASSWORD:?Set TAK_RABBITMQ_PASSWORD in .env}
+      RABBITMQ_DEFAULT_VHOST: "/"
+    ports:
+      - "15673:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  opentakserver:
+    image: takserver-opentakserver
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: tak-server
+    hostname: opentakserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8089:8089"
+    environment:
+      TAK_SECRET_KEY: ${TAK_SECRET_KEY:?Set TAK_SECRET_KEY in .env}
+      TAK_SECURITY_PASSWORD_SALT: ${TAK_SECURITY_PASSWORD_SALT:?Set TAK_SECURITY_PASSWORD_SALT in .env}
+      TAK_POSTGRES_PASSWORD: ${TAK_POSTGRES_PASSWORD:?Set TAK_POSTGRES_PASSWORD in .env}
+      TAK_RABBITMQ_PASSWORD: ${TAK_RABBITMQ_PASSWORD:?Set TAK_RABBITMQ_PASSWORD in .env}
+    volumes:
+      - ots_certs:/etc/opentakserver/certs
+      - ots_data:/var/lib/opentakserver
+      - ots_logs:/var/log/opentakserver
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8089/api/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  cot_parser:
+    image: takserver-opentakserver
+    container_name: tak-cot-parser
+    hostname: cot-parser
+    command: ["cot_parser"]
+    depends_on:
+      opentakserver:
+        condition: service_healthy
+    volumes:
+      - ots_certs:/etc/opentakserver/certs
+      - ots_data:/var/lib/opentakserver
+      - ots_logs:/var/log/opentakserver
+    environment:
+      TAK_SECRET_KEY: ${TAK_SECRET_KEY:?Set TAK_SECRET_KEY in .env}
+      TAK_SECURITY_PASSWORD_SALT: ${TAK_SECURITY_PASSWORD_SALT:?Set TAK_SECURITY_PASSWORD_SALT in .env}
+      TAK_POSTGRES_PASSWORD: ${TAK_POSTGRES_PASSWORD:?Set TAK_POSTGRES_PASSWORD in .env}
+      TAK_RABBITMQ_PASSWORD: ${TAK_RABBITMQ_PASSWORD:?Set TAK_RABBITMQ_PASSWORD in .env}
+    restart: unless-stopped
+
+  cot_tcp:
+    image: takserver-opentakserver
+    container_name: tak-cot-tcp
+    hostname: cot-tcp
+    command: ["eud_handler", "--no-ssl"]
+    depends_on:
+      opentakserver:
+        condition: service_healthy
+    ports:
+      - "8088:8088"
+    volumes:
+      - ots_certs:/etc/opentakserver/certs
+      - ots_data:/var/lib/opentakserver
+      - ots_logs:/var/log/opentakserver
+    environment:
+      TAK_SECRET_KEY: ${TAK_SECRET_KEY:?Set TAK_SECRET_KEY in .env}
+      TAK_SECURITY_PASSWORD_SALT: ${TAK_SECURITY_PASSWORD_SALT:?Set TAK_SECURITY_PASSWORD_SALT in .env}
+      TAK_POSTGRES_PASSWORD: ${TAK_POSTGRES_PASSWORD:?Set TAK_POSTGRES_PASSWORD in .env}
+      TAK_RABBITMQ_PASSWORD: ${TAK_RABBITMQ_PASSWORD:?Set TAK_RABBITMQ_PASSWORD in .env}
+    restart: unless-stopped
+
+  cot_ssl:
+    image: takserver-opentakserver
+    container_name: tak-cot-ssl
+    hostname: cot-ssl
+    command: ["eud_handler", "--ssl"]
+    depends_on:
+      opentakserver:
+        condition: service_healthy
+    ports:
+      - "8443:8443"
+    volumes:
+      - ots_certs:/etc/opentakserver/certs
+      - ots_data:/var/lib/opentakserver
+      - ots_logs:/var/log/opentakserver
+    environment:
+      TAK_SECRET_KEY: ${TAK_SECRET_KEY:?Set TAK_SECRET_KEY in .env}
+      TAK_SECURITY_PASSWORD_SALT: ${TAK_SECURITY_PASSWORD_SALT:?Set TAK_SECURITY_PASSWORD_SALT in .env}
+      TAK_POSTGRES_PASSWORD: ${TAK_POSTGRES_PASSWORD:?Set TAK_POSTGRES_PASSWORD in .env}
+      TAK_RABBITMQ_PASSWORD: ${TAK_RABBITMQ_PASSWORD:?Set TAK_RABBITMQ_PASSWORD in .env}
+    restart: unless-stopped
+
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: tak-mediamtx
+    profiles:
+      - video
+    ports:
+      - "8554:8554"
+      - "8554:8554/udp"
+      - "8889:8889"
+      - "9997:9997"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  ots_certs:
+  ots_data:
+  ots_logs:
